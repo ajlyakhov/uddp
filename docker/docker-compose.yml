@@ -1,0 +1,32 @@
+services:
+  core:
+    container_name: core
+    hostname: core
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+    command: bash /opt/app/django.sh
+    platform: linux/amd64
+    ports:
+      - 8000:8000
+
+  worker:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+    container_name: worker
+    hostname: worker
+    command: bash /opt/app/celery.sh
+
+  redis:
+    container_name: redis
+    hostname: redis
+    image: redis:latest
+    ports:
+      - '127.0.0.1:6379:6379'
+    volumes:
+      - redis-data:/data
+    restart: always
+
+volumes:
+  redis-data:

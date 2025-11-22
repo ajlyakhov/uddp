@@ -1,0 +1,15 @@
+from django.contrib import admin
+from django.urls import path, include
+
+from core.views import PublishView, StatusView, UnPublishView
+
+urlpatterns = [
+    path('', include('setup.urls')),
+    path('admin/', admin.site.urls),
+    path('publish/status/<int:task_id>/', StatusView.as_view()),
+    path('publish/', PublishView.as_view()),
+]
+
+admin.site.site_header = 'Universal Data Delivery Pipeliner'
+admin.site.site_title = 'UDDP'
+admin.site.index_title = 'UDDP Administration'
