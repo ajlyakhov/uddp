@@ -37,7 +37,7 @@ APPS = [
 ]
 
 LIBS = [
-    # 'storages',
+    'storages',
     'corsheaders',
     'django_extensions',
     'django_prometheus',

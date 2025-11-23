@@ -1,5 +1,5 @@
 from django import forms
-from reference.models import Source, SourceContentMap
+from reference.models import Source, DataType
 
 class SetupForm(forms.Form):
     admin_username = forms.CharField(max_length=150, initial="admin", help_text="Username for the administrator account")
@@ -7,6 +7,6 @@ class SetupForm(forms.Form):
     source_token = forms.CharField(max_length=512, help_text="Authentication token for the source system")
 
 class PublishTestForm(forms.Form):
-    source = forms.ModelChoiceField(queryset=Source.objects.all(), empty_label="Select Source System")
-    content_type = forms.CharField(max_length=100, help_text="Content type code (e.g., 'article', 'video')")
+    content_type = forms.ModelChoiceField(queryset=DataType.objects.all(), empty_label="Select Data Type", required=False)
     payload = forms.CharField(widget=forms.Textarea, help_text="JSON payload for the publish request")
+

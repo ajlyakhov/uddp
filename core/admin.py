@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils.safestring import mark_safe
 from django.db import models
 from django.conf import settings
-from core.models import Task, ContentItem, TaskStatus
+from core.models import Task, DataItem, TaskStatus, Webhook, DataSource
 from reference.helper import pretty_json
 from conf.celery import app
 # from web.resource_cache import invalidate_cache
@@ -28,32 +28,32 @@ class TaskAdmin(admin.ModelAdmin):
         ('', {
             'fields': ('id', 'status'),
         }),
-        ('Издательская система', {
+        ('Source System', {
             'fields': ('publisher_meta_pretty', 'source', 'publisher_status', 'publisher_date'),
         }),
-        ('Сервисная платформа', {
+        ('Consumer', {
             'fields': (
             'service_meta_pretty', 'service', 'service_platform', 'service_response', 'service_response_code',
             'service_status', 'service_publish_date', 'service_item_link'),
         }),
-        ('Логирование', {
+        ('Logging', {
             'fields': ('log', 'error_description', 'context_pretty'),
         }),
     )
 
     def context_pretty(self, obj: Task):
         return pretty_json(obj.context)
-    context_pretty.short_description = "Контекст выполнения задачи"
+    context_pretty.short_description = "Task Execution Context"
 
     def publisher_meta_pretty(self, obj: Task):
         return pretty_json(obj.publisher_meta)
 
-    publisher_meta_pretty.short_description = "JSON данные запроса на публикацию"
+    publisher_meta_pretty.short_description = "Publication Request JSON Data"
 
     def service_meta_pretty(self, obj: Task):
         return pretty_json(obj.service_meta)
 
-    service_meta_pretty.short_description = "JSON данные запроса в сервис"
+    service_meta_pretty.short_description = "Service Request JSON Data"
 
     def items(self, obj: Task):
         items = []
@@ -62,7 +62,7 @@ class TaskAdmin(admin.ModelAdmin):
             items.append(f"<a href='{url}'>{item.sku}/{item.year}</a>")
         return mark_safe("<br>".join(items) if len(items) > 0 else "-")
 
-    items.short_description = "ЕК"
+    items.short_description = "Content Item"
 
     def status(self, obj: Task):
         colors = {
@@ -71,25 +71,25 @@ class TaskAdmin(admin.ModelAdmin):
             TaskStatus.STATUS_ERROR: "#FF4513",
             None: "#8e918f",
         }
-        publisher_status = TaskStatus(obj.publisher_status).label if obj.publisher_status else "не начато"
-        service_status = TaskStatus(obj.service_status).label if obj.service_status else "не начато"
+        publisher_status = TaskStatus(obj.publisher_status).label if obj.publisher_status else "not started"
+        service_status = TaskStatus(obj.service_status).label if obj.service_status else "not started"
         html = f"""
         <div style="width:30px;min-width:30px;">
-        <a href="#" title="Издательская система - {publisher_status}" style='display:inline-block;width:10px;height:10px;border-radius:50%;background-color:{colors[obj.publisher_status]}'></a>
-        <a href="#" title="Сервисная платформа - {service_status}" style='display:inline-block;width:10px;height:10px;border-radius:50%;background-color:{colors[obj.service_status]}'></a>
+        <a href="#" title="Source System - {publisher_status}" style='display:inline-block;width:10px;height:10px;border-radius:50%;background-color:{colors[obj.publisher_status]}'></a>
+        <a href="#" title="Consumer - {service_status}" style='display:inline-block;width:10px;height:10px;border-radius:50%;background-color:{colors[obj.service_status]}'></a>
         </div>
         """
         return mark_safe(html)
 
-    status.short_description = "Статус"
+    status.short_description = "Status"
 
     def service_platform(self, obj: Task):
         try:
-            return obj.service.target
+            return obj.service.consumer
         except:
             return "-"
 
-    service_platform.short_description = "Сервисная платформа"
+    service_platform.short_description = "Consumer"
 
     def has_change_permission(self, request, obj=None):
         return False
@@ -99,14 +99,14 @@ class TaskAdmin(admin.ModelAdmin):
 
     def republish(self, request, queryset):
         for task in queryset:
-            for stage in task.service.target_stages.filter(active=True).order_by('step'):
+            for stage in task.service.processing_stages.filter(active=True).order_by('step'):
                 try:
                     process_module = importlib.import_module(stage.module)
                     process_module.execute(task)
                 except Exception as e:
                     task.set_publisher_error(f'module {stage.module} cannot be imported: {e}')
                     return
-    republish.short_description = "Переопубликовать на сервисную платформу"
+    republish.short_description = "Republish to Consumer"
 
     @staticmethod
     @app.task
@@ -118,14 +118,14 @@ class TaskAdmin(admin.ModelAdmin):
         task = Task.objects.get(id=task_id)
         
         with TemporaryDirectory() as tmp_dir:
-            # Инициализируем контекст если он None
+            # Initialize context if None
             if task.context is None:
                 task.context = {}
             
-            # Устанавливаем tmp_dir в контекст
+            # Set tmp_dir in context
             task.set_context({"tmp_dir": tmp_dir})
             
-            for stage in task.service.source_stages.filter(active=True).order_by('step'):
+            for stage in task.service.processing_stages.filter(active=True).order_by('step'):
                 try:
                     process_module = importlib.import_module(stage.module)
                     process_module.execute(task)
@@ -133,7 +133,7 @@ class TaskAdmin(admin.ModelAdmin):
                     task.set_publisher_error(f'module {stage.module} cannot be imported: {e}')
                     return
             
-            # Устанавливаем успешный статус
+            # Set success status
             task.publisher_status = TaskStatus.STATUS_OK
             task.publisher_date = datetime.now(tz=pytz.UTC)
             task.save(update_fields=['publisher_status', 'publisher_date'])
@@ -141,7 +141,7 @@ class TaskAdmin(admin.ModelAdmin):
     def reimport(self, request, queryset):
         for task in queryset:
             self.async_reimport.delay(task.id)
-    reimport.short_description = "Переопубликовать из издательской системы"
+    reimport.short_description = "Republish from Source System"
 
     def clear_log(self, request, queryset):
         updated_count = 0
@@ -155,12 +155,12 @@ class TaskAdmin(admin.ModelAdmin):
             task.save(update_fields=['log', 'last_log', 'error_description', 'context', 'service_meta', 'service_response'])
             updated_count += 1
         
-        self.message_user(request, f"Очищены логи и метаданные для {updated_count} задач.")
-    clear_log.short_description = "Очистить лог"
+        self.message_user(request, f"Logs and metadata cleared for {updated_count} tasks.")
+    clear_log.short_description = "Clear Log"
 
 
-@admin.register(ContentItem)
-class ContentItemAdmin(admin.ModelAdmin):
+@admin.register(DataItem)
+class DataItemAdmin(admin.ModelAdmin):
     list_display = ('created', 'type', 'source', 'sku', 'year')
     search_fields = ('sku',)
     readonly_fields = ('full_link', 'demo_link', 'meta_pretty', 'internal_meta_pretty', )
@@ -169,27 +169,27 @@ class ContentItemAdmin(admin.ModelAdmin):
     actions = ('clear_cache', 'test_cdn_connection')
     list_filter = ('type', 'source')
 
-    def meta_pretty(self, obj: ContentItem):
+    def meta_pretty(self, obj: DataItem):
         return pretty_json(obj.meta)
 
-    meta_pretty.short_description = "Метаданные пакета"
+    meta_pretty.short_description = "Package Metadata"
 
-    def internal_meta_pretty(self, obj: ContentItem):
+    def internal_meta_pretty(self, obj: DataItem):
         return pretty_json(obj.internal_meta)
 
-    internal_meta_pretty.short_description = "Метаданные внутри пакета"
+    internal_meta_pretty.short_description = "Internal Package Metadata"
 
     def full_link(self, obj):
         url = obj.get_absolute_url()
         return mark_safe(f"<a href='{url}' target='_blank'>Открыть</a>")
 
-    full_link.short_description = "Ссылка на полную версию"
+    full_link.short_description = "Full Version Link"
 
     def demo_link(self, obj):
         url = obj.get_absolute_url(demo=True)
-        return mark_safe(f"<a href='{url}' target='_blank'>Открыть</a>")
+        return mark_safe(f"<a href='{url}' target='_blank'>Open</a>")
 
-    demo_link.short_description = "Ссылка на демо версию"
+    demo_link.short_description = "Demo Version Link"
 
     def has_change_permission(self, request, obj=None):
         if request.user.is_superuser:
@@ -198,69 +198,69 @@ class ContentItemAdmin(admin.ModelAdmin):
 
     def clear_cache(self, request, queryset):
         """
-        Очищает кэш Redis и CDN для выбранных ContentItem
+        Clears Redis and CDN cache for selected DataItems
         """
         cleared_count = 0
         errors = []
         
         for content_item in queryset:
             try:
-                # Определяем base_path для очистки кэша
+                # Determine base_path for cache clearing
                 base_path = self._get_cache_base_path(content_item)
                 
                 if base_path:
-                    # Очищаем Redis кэш
+                    # Clear Redis cache
                     # redis_cleared = invalidate_cache(base_path, None)
                     redis_cleared = 0
                     
-                    # Очищаем CDN кэш
+                    # Clear CDN cache
                     cdn_cleared = self._clear_cdn_cache(content_item)
                     
                     cleared_count += 1
                     self.message_user(
                         request, 
-                        f"Очищен кэш для {content_item.sku}/{content_item.year}: "
-                        f"Redis ({redis_cleared} ключей), CDN ({cdn_cleared})"
+                        f"Cache cleared for {content_item.sku}/{content_item.year}: "
+                        f"Redis ({redis_cleared} keys), CDN ({cdn_cleared})"
                     )
                 else:
-                    errors.append(f"Не удалось определить путь кэша для {content_item.sku}/{content_item.year}")
+                    errors.append(f"Could not determine cache path for {content_item.sku}/{content_item.year}")
                     
             except Exception as e:
-                errors.append(f"Ошибка при очистке кэша для {content_item.sku}/{content_item.year}: {str(e)}")
+                errors.append(f"Error clearing cache for {content_item.sku}/{content_item.year}: {str(e)}")
         
         if errors:
-            self.message_user(request, f"Ошибки при очистке кэша: {'; '.join(errors)}", level='WARNING')
+            self.message_user(request, f"Cache clearing errors: {'; '.join(errors)}", level='WARNING')
         
         if cleared_count > 0:
-            self.message_user(request, f"Успешно очищен кэш для {cleared_count} элементов контента.")
+            self.message_user(request, f"Successfully cleared cache for {cleared_count} content items.")
     
-    clear_cache.short_description = "Сбросить кэш"
+    clear_cache.short_description = "Clear Cache"
     
     def _get_cache_base_path(self, content_item):
         """
-        Определяет base_path для очистки кэша на основе ContentItem
+        Determines base_path for cache clearing based on ContentItem
         """
         try:
-            # Если есть offline URL, извлекаем путь из него
+            # If offline URL exists, extract path from it
             if content_item.offline:
                 base_path = "/".join(content_item.offline.split("/")[:-1])
                 base_path = base_path.split("://")[1]
                 base_path = "/".join(base_path.split("/")[3:])
                 return base_path
             
-            # Если есть internal_meta с информацией о контенте
+            # If internal_meta has content info
             if content_item.internal_meta:
                 internal_meta = content_item.internal_meta
                 
-                # Для efu_mob типа
+                # For efu_mob type
                 if "content" in internal_meta and "code" in internal_meta and "year" in internal_meta:
                     return "/".join([internal_meta["content"], internal_meta["code"], internal_meta["year"]])
                 
-                # Для playlist типа
+                # For playlist type
                 if content_item.type and "efu_html" in str(content_item.type):
                     return f'efu_html/{content_item.sku}/{content_item.year}/'
             
-            # Fallback: используем тип контента, sku и year
+            # Fallback: use content type, sku and year
             if content_item.type and content_item.sku and content_item.year:
                 type_name = str(content_item.type).lower()
                 return f'{type_name}/{content_item.sku}/{content_item.year}/'
@@ -272,13 +272,13 @@ class ContentItemAdmin(admin.ModelAdmin):
     
     def _clear_cdn_cache(self, content_item):
         """
-        Очищает CDN кэш для ContentItem
+        Clears CDN cache for ContentItem
         """
         if not settings.CDN_PURGE:
-            return "CDN не настроен"
+            return "CDN not configured"
             
         try:
-            # Определяем путь для CDN
+            # Determine CDN path
             if content_item.internal_meta and "content" in content_item.internal_meta:
                 content_type = content_item.internal_meta["content"]
                 code = content_item.internal_meta.get("code", content_item.sku)
@@ -305,31 +305,31 @@ class ContentItemAdmin(admin.ModelAdmin):
             if response.status_code in [200, 201]:
                 return f"OK ({path})"
             elif response.status_code == 401:
-                return f"Ошибка авторизации (401) - проверьте CDN_PURGE"
+                return f"Authorization error (401) - check CDN_PURGE"
             elif response.status_code == 403:
-                return f"Доступ запрещен (403) - недостаточно прав"
+                return f"Access denied (403) - insufficient permissions"
             elif response.status_code == 404:
-                return f"Ресурс не найден (404) - проверьте путь {path}"
+                return f"Resource not found (404) - check path {path}"
             else:
                 try:
                     error_detail = response.json()
-                    return f"Ошибка {response.status_code}: {error_detail}"
+                    return f"Error {response.status_code}: {error_detail}"
                 except:
-                    return f"Ошибка {response.status_code}: {response.text[:100]}"
+                    return f"Error {response.status_code}: {response.text[:100]}"
                 
         except Exception as e:
-            return f"Ошибка: {str(e)}"
+            return f"Error: {str(e)}"
     
     def test_cdn_connection(self, request, queryset):
         """
-        Тестирует соединение с CDN API
+        Tests connection to CDN API
         """
         if not settings.CDN_PURGE:
-            self.message_user(request, "CDN_PURGE не настроен в переменных окружения", level='ERROR')
+            self.message_user(request, "CDN_PURGE not set in environment variables", level='ERROR')
             return
             
         try:
-            # Тестовый запрос с минимальным путем
+            # Test request with minimal path
             url = "https://api.cdn2.cloud.ru/cdn/resources/187148/purge"
             headers = {
                 "Authorization": f"APIKey {settings.CDN_PURGE}",
@@ -342,19 +342,31 @@ class ContentItemAdmin(admin.ModelAdmin):
             response = requests.post(url, data=data, headers=headers, verify=False, timeout=30)
             
             if response.status_code in [200, 201]:
-                self.message_user(request, f"CDN API доступен. Токен корректный. Ответ: {response.text[:200]}")
+                self.message_user(request, f"CDN API available. Token correct. Response: {response.text[:200]}")
             elif response.status_code == 401:
-                self.message_user(request, "CDN API недоступен. Ошибка авторизации (401) - проверьте CDN_PURGE", level='ERROR')
+                self.message_user(request, "CDN API unavailable. Authorization error (401) - check CDN_PURGE", level='ERROR')
             elif response.status_code == 403:
-                self.message_user(request, "CDN API недоступен. Доступ запрещен (403) - недостаточно прав", level='ERROR')
+                self.message_user(request, "CDN API unavailable. Access denied (403) - insufficient permissions", level='ERROR')
             else:
-                self.message_user(request, f"CDN API вернул код {response.status_code}. Ответ: {response.text[:200]}", level='WARNING')
+                self.message_user(request, f"CDN API returned code {response.status_code}. Response: {response.text[:200]}", level='WARNING')
                 
         except requests.exceptions.Timeout:
-            self.message_user(request, "CDN API недоступен. Таймаут соединения", level='ERROR')
+            self.message_user(request, "CDN API unavailable. Connection timeout", level='ERROR')
         except requests.exceptions.ConnectionError:
-            self.message_user(request, "CDN API недоступен. Ошибка соединения", level='ERROR')
+            self.message_user(request, "CDN API unavailable. Connection error", level='ERROR')
         except Exception as e:
-            self.message_user(request, f"Ошибка при тестировании CDN: {str(e)}", level='ERROR')
+            self.message_user(request, f"Error testing CDN: {str(e)}", level='ERROR')
     
-    test_cdn_connection.short_description = "Тестировать CDN соединение"
+    test_cdn_connection.short_description = "Test CDN Connection"
+
+
+@admin.register(Webhook)
+class WebhookAdmin(admin.ModelAdmin):
+    list_display = ('consumer', 'url', 'task')
+    list_filter = ('consumer', )
+
+
+@admin.register(DataSource)
+class DataSourceAdmin(admin.ModelAdmin):
+    list_display = ('type', 'connection', 'task')
+    list_filter = ('type', )

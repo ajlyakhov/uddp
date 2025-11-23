@@ -10,7 +10,7 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 from core.models import Task, TaskStatus
-from reference.models import Source, SourceContentMap
+from reference.models import Source, DataType
 from core.tasks import process_publisher
 
 
@@ -51,10 +51,10 @@ class PublishView(View):
         # находим тип контента
         content = None
         if publisher_meta.get('media_type', None):
-            content = SourceContentMap.objects.filter(source=source,
+            content = DataType.objects.filter(source=source,
                                                          source_code=publisher_meta.get('media_type')).first()
         elif publisher_meta.get('content', None):
-            content = SourceContentMap.objects.filter(source=source,
+            content = DataType.objects.filter(source=source,
                                                          source_code=publisher_meta.get('content')).first()
 
         if not content:

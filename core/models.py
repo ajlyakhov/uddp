@@ -20,7 +20,7 @@ class Task(Model):
     service_meta = JSONField(null=True, verbose_name="Service Request JSON Data")
     service_response = JSONField(null=True, verbose_name="Service Response JSON Data")
     service_response_code = IntegerField(null=True, blank=True, verbose_name="Service Response Code")
-    service = ForeignKey('reference.SourceContentMap', on_delete=SET_NULL, null=True, verbose_name="Target Service",
+    service = ForeignKey('reference.DataType', on_delete=SET_NULL, null=True, verbose_name="Target Service",
                          related_name="tasks")
     service_status = IntegerField(choices=TaskStatus.choices, null=True, verbose_name="[PS] Publication Status")
     service_publish_date = DateTimeField(null=True, blank=True, verbose_name="Service Publication Date")
@@ -96,9 +96,9 @@ class Task(Model):
         self.save(update_fields=['total_files'])
 
 
-class ContentItem(Model):
+class DataItem(Model):
     created = DateTimeField(auto_now_add=True)
-    type = ForeignKey('reference.SourceContentMap', on_delete=SET_NULL, null=True, verbose_name="Content Type")
+    type = ForeignKey('reference.DataType', on_delete=SET_NULL, null=True, verbose_name="Content Type")
     source = ForeignKey('reference.Source', on_delete=SET_NULL, null=True, verbose_name="Source System")
     meta = JSONField(null=True, blank=True, verbose_name="Package Metadata")
     internal_meta = JSONField(null=True, blank=True, verbose_name="Internal Package Metadata")
@@ -113,11 +113,43 @@ class ContentItem(Model):
     start_file = CharField(max_length=1024, null=True, blank=True, verbose_name="Start File")
 
     class Meta:
-        verbose_name = "Content Item"
-        verbose_name_plural = "Content Items"
+        verbose_name = "Data Item"
+        verbose_name_plural = "Data Items"
 
     def __str__(self):
         return f"{self.sku} / {self.year}"
 
-    def get_absolute_url(self, demo=False):
-        return self.type.get_link(self.sku, self.year, demo=demo)
+
+
+
+class Webhook(Model):
+    consumer = ForeignKey('reference.Consumer', on_delete=CASCADE, null=True, verbose_name="Consumer")
+    url = URLField(max_length=2048, null=True, verbose_name="Webhook URL")
+    jwt_secret = CharField(max_length=1024, null=True, blank=True, verbose_name="JWT Secret")
+    aud = CharField(max_length=100, null=True, blank=True, verbose_name="AUD")
+    ttl = IntegerField(default=3600, verbose_name="JWT TTL (seconds)")
+    task = ForeignKey('core.Task', on_delete=CASCADE, null=True, verbose_name="Task", related_name="webhooks")
+
+    class Meta:
+        verbose_name = "Webhook"
+        verbose_name_plural = "Webhooks"
+
+    def __str__(self):
+        return f"Webhook for {self.consumer}"
+
+
+class DataSource(Model):
+    class Types(TextChoices):
+        POSTGRES = "postgres", "PostgreSQL"
+        DUCKDB = "duckdb", "DuckDB"
+
+    type = CharField(max_length=50, choices=Types.choices, default=Types.POSTGRES, verbose_name="Type")
+    connection = CharField(max_length=2048, null=True, verbose_name="Connection String")
+    task = ForeignKey('core.Task', on_delete=CASCADE, null=True, verbose_name="Task", related_name="datasources")
+
+    class Meta:
+        verbose_name = "Data Source"
+        verbose_name_plural = "Data Sources"
+
+    def __str__(self):
+        return f"{self.type} DataSource"

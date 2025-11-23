@@ -1,5 +1,5 @@
 from django.contrib import admin
-from reference.models import Source, SourceContentMap, SourceStage, Target, TargetStage
+from reference.models import Source, DataType, ProcessingStage, Consumer
 
 
 
@@ -8,22 +8,17 @@ class SourceAdmin(admin.ModelAdmin):
     list_display = ('name', 'key')
 
 
-class SourceStageInline(admin.TabularInline):
-    model = SourceStage
-    extra = 0
-
-
-class TargetStageInline(admin.TabularInline):
-    model = TargetStage
+class ProcessingStageInline(admin.TabularInline):
+    model = ProcessingStage
     extra = 0
 
 
 
 
-@admin.register(SourceContentMap)
-class SourceContentMapAdmin(admin.ModelAdmin):
-    list_display = ('name', 'source', 'source_code', 'target', 'target_code')
-    inlines = (SourceStageInline, TargetStageInline)
+@admin.register(DataType)
+class DataTypeAdmin(admin.ModelAdmin):
+    list_display = ('name', 'source', 'source_code', 'consumer')
+    inlines = (ProcessingStageInline, )
     fieldsets = (
         ('', {
             'fields': ('name', ),
@@ -31,14 +26,14 @@ class SourceContentMapAdmin(admin.ModelAdmin):
         ('Source System', {
             'fields': ('source', 'source_code', ),
         }),
-        ('Target Platform', {
-            'fields': ('target', 'target_code', 'modifier_module', 'link_module'),
+        ('Consumer', {
+            'fields': ('consumer', ),
         }),
     )
 
 
-@admin.register(Target)
-class TargetAdmin(admin.ModelAdmin):
-    list_display = ('name', 'publish_api', )
+@admin.register(Consumer)
+class ConsumerAdmin(admin.ModelAdmin):
+    list_display = ('name', 'type', 'key', )
 
 
