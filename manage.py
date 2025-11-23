@@ -4,17 +4,7 @@ import os
 import sys
 
 
-# Monkeypatch for Django 5.1.3 + Python 3.14 compatibility
-try:
-    from django.template.context import BaseContext
-    def patched_base_context_copy(self):
-        duplicate = self.__class__.__new__(self.__class__)
-        duplicate.__dict__ = self.__dict__.copy()
-        duplicate.dicts = self.dicts[:]
-        return duplicate
-    BaseContext.__copy__ = patched_base_context_copy
-except ImportError:
-    pass
+
 
 def main():
     """Run administrative tasks."""

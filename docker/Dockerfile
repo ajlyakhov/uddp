@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED 1
 
 # install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
+    ffmpeg build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # install python packages

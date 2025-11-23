@@ -7,6 +7,18 @@ from pathlib import Path
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Monkeypatch for Django 5.1.3 + Python 3.14 compatibility
+try:
+    from django.template.context import BaseContext
+    def patched_base_context_copy(self):
+        duplicate = self.__class__.__new__(self.__class__)
+        duplicate.__dict__ = self.__dict__.copy()
+        duplicate.dicts = self.dicts[:]
+        return duplicate
+    BaseContext.__copy__ = patched_base_context_copy
+except ImportError:
+    pass
 SECRET_KEY = 'django-insecure-yz=84@zeq(@_!+m9n+mop+s&uiilq9tr2j)+=_)h+zdib@59*j'
 DEBUG = True if os.getenv('DEBUG', 'True') == 'True' else False
 if DEBUG:
@@ -45,6 +57,7 @@ INSTALLED_APPS = CORE + LIBS + APPS
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -110,8 +123,9 @@ USE_TZ = True
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-STATIC_URL = 'static/'
-STATIC_ROOT = os.path.join(PROJECT_DIR, 'static')
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_URL = '/static/'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 MEDIA_ROOT = os.path.join(PROJECT_DIR, 'data')
 MEDIA_URL = '/media/'
