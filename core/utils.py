@@ -104,25 +104,21 @@ def streaming_download_and_unzip_archive(
         max_retries: int = 3,
         enable_resume: bool = True,
 ) -> None:
-    """Скачивание и распаковка архива с поддержкой повторных попыток и докачки"""
     retry_count = 0
     last_error = None
     temp_file_path = None
     
-    # Создаем временный файл для докачки
     if enable_resume:
         temp_file_path = dir_path / f"temp_download_{task.id}.zip"
     
     while retry_count <= max_retries:
         try:
-            task.logging(f"{__name__}", f"Попытка скачивания {retry_count + 1}/{max_retries + 1}")
+            task.logging(f"{__name__}", f"Download attempt {retry_count + 1}/{max_retries + 1}")
             
             if enable_resume and temp_file_path and temp_file_path.exists():
-                # Попытка докачки через временный файл
-                task.logging(f"{__name__}", "Попытка докачки через временный файл")
+                task.logging(f"{__name__}", "Attempting resume via temporary file")
                 _download_to_temp_with_resume(task, url, temp_file_path, http_method, data, json)
                 
-                # Распаковываем из временного файла
                 with open(temp_file_path, 'rb') as temp_file:
                     for file_name, file_size, unzipped_chunks in stream_unzip(temp_file):
                         file_name = file_name.decode("utf-8")
@@ -138,11 +134,10 @@ def streaming_download_and_unzip_archive(
                                 for chunk in unzipped_chunks:
                                     f.write(chunk)
                 
-                # Удаляем временный файл после успешной распаковки
+                # Deleting temporary file after successful unzip
                 temp_file_path.unlink()
                 
             else:
-                # Обычное скачивание
                 for file_name, file_size, unzipped_chunks in stream_unzip(
                         _streaming_download(task=task, url=url, http_method=http_method, data=data, json=json)
                 ):
@@ -159,8 +154,8 @@ def streaming_download_and_unzip_archive(
                             for chunk in unzipped_chunks:
                                 f.write(chunk)
             
-            # Если дошли сюда - скачивание успешно завершено
-            task.logging(f"{__name__}", f"Скачивание успешно завершено с попытки {retry_count + 1}")
+            # If reached here - download successfully completed
+            task.logging(f"{__name__}", f"Download successfully completed on attempt {retry_count + 1}")
             return
             
         except (requests.exceptions.RequestException, requests.exceptions.ConnectionError, 
@@ -169,8 +164,8 @@ def streaming_download_and_unzip_archive(
             retry_count += 1
             
             if retry_count <= max_retries:
-                wait_time = min(2 ** retry_count, 30)  # Экспоненциальная задержка, макс 30 сек
-                task.logging(f"{__name__}", f"Ошибка скачивания: {str(e)}. Повтор через {wait_time} сек...")
+                wait_time = min(2 ** retry_count, 30)  # Exponential backoff, max 30 sec
+                task.logging(f"{__name__}", f"Download error: {str(e)}. Retrying in {wait_time} sec...")
                 
                 import time
                 time.sleep(wait_time)
@@ -180,13 +175,11 @@ def streaming_download_and_unzip_archive(
                 
         except UnzipError as e:
             logger.exception("Error unzipping archive downloaded from url", url=url, task_id=task.id)
-            raise Exception(f"Ошибка распаковки архива: {str(e)}") from e
+            raise Exception(f"Archive unzip error: {str(e)}") from e
     
-    # Очищаем временный файл при ошибке
     if temp_file_path and temp_file_path.exists():
         temp_file_path.unlink()
     
-    # Если все попытки исчерпаны
     if isinstance(last_error, requests.exceptions.RequestException):
         response_error = ""
         if hasattr(last_error, "response") and hasattr(last_error.response, "content"):
@@ -199,14 +192,14 @@ def streaming_download_and_unzip_archive(
             task_id=task.id,
             retry_count=retry_count,
         )
-        raise Exception(f"Не удалось скачать пакет после {max_retries + 1} попыток: {response_error}") from last_error
+        raise Exception(f"Failed to download package after {max_retries + 1} attempts: {response_error}") from last_error
     
     elif isinstance(last_error, TruncatedDataError):
         logger.exception("Truncated ZIP archive after all retries", url=url, task_id=task.id, retry_count=retry_count)
-        raise Exception(f"ZIP архив поврежден или скачан не полностью после {max_retries + 1} попыток: {str(last_error)}") from last_error
+        raise Exception(f"ZIP archive corrupted or incomplete after {max_retries + 1} attempts: {str(last_error)}") from last_error
     
     else:
-        raise Exception(f"Неожиданная ошибка после {max_retries + 1} попыток: {str(last_error)}") from last_error
+        raise Exception(f"Unexpected error after {max_retries + 1} attempts: {str(last_error)}") from last_error
 
 
 def _download_to_temp_with_resume(
@@ -217,20 +210,20 @@ def _download_to_temp_with_resume(
         data: Optional[Dict] = None,
         json: Optional[Dict] = None,
 ) -> None:
-    """Скачивание во временный файл с поддержкой докачки"""
+    """Download to temporary file with resume support"""
     downloaded_size = 0
     
-    # Проверяем существующий размер файла
+    # Checking existing file size
     if temp_file_path.exists():
         downloaded_size = temp_file_path.stat().st_size
-        task.logging(f"{__name__}", f"Найден частично скачанный файл размером {pretty_file_size(downloaded_size)}")
+        task.logging(f"{__name__}", f"Found partially downloaded file of size {pretty_file_size(downloaded_size)}")
     
     response = _get_response_with_range(task, url, http_method, data, json, downloaded_size)
     
     try:
         response.raise_for_status()
         
-        # Открываем файл для дозаписи
+        # Opening file for appending
         mode = 'ab' if downloaded_size > 0 else 'wb'
         with open(temp_file_path, mode) as f:
             for chunk in response.iter_content(chunk_size=1024*1024*10):
@@ -251,13 +244,13 @@ def _streaming_download_with_resume(
         json: Optional[Dict] = None,
         temp_file_path: Optional[Path] = None,
 ) -> Generator[None, None, None]:
-    """Скачивание с возможностью докачки при обрыве соединения"""
+    """Download with resume capability on connection drop"""
     downloaded_size = 0
     
-    # Если есть временный файл, проверяем его размер
+    # If temporary file exists, check its size
     if temp_file_path and temp_file_path.exists():
         downloaded_size = temp_file_path.stat().st_size
-        task.logging(f"{__name__}", f"Найден частично скачанный файл размером {pretty_file_size(downloaded_size)}")
+        task.logging(f"{__name__}", f"Found partially downloaded file of size {pretty_file_size(downloaded_size)}")
     
     response = _get_response_with_range(task, url, http_method, data, json, downloaded_size)
     
@@ -269,7 +262,7 @@ def _streaming_download_with_resume(
 
         total_length = response.headers.get("Content-Length", None)
         if total_length:
-            total_size = int(total_length) + downloaded_size  # Учитываем уже скачанный размер
+            total_size = int(total_length) + downloaded_size  # Including already downloaded size
         else:
             total_size = 0
 
@@ -277,22 +270,22 @@ def _streaming_download_with_resume(
         task.logging_last(f"{__name__}", f"---> downloaded {pretty_file_size(downloaded_size)}")
         
         for chunk in response.iter_content(chunk_size=chunk_size):
-            if not chunk:  # Проверяем на пустые чанки
-                task.logging(f"{__name__}", "WARNING: Получен пустой чанк данных")
+            if not chunk:  # Checking for empty chunks
+                task.logging(f"{__name__}", "WARNING: Received empty data chunk")
                 continue
                 
             downloaded_size += len(chunk)
             task.logging_last(f"{__name__}", f"---> downloaded {pretty_file_size(downloaded_size)}")
             
-            # Проверяем, что скачано достаточно данных
+            # Checking if enough data downloaded
             if total_size and downloaded_size >= total_size:
-                task.logging(f"{__name__}", f"Скачивание завершено: {pretty_file_size(downloaded_size)}")
+                task.logging(f"{__name__}", f"Download completed: {pretty_file_size(downloaded_size)}")
 
             yield chunk
         
-        # Финальная проверка размера
+        # Final size check
         if total_size and downloaded_size < total_size:
-            task.logging(f"{__name__}", f"WARNING: Скачано меньше ожидаемого размера: {pretty_file_size(downloaded_size)} из {pretty_file_size(total_size)}")
+            task.logging(f"{__name__}", f"WARNING: Downloaded less than expected size: {pretty_file_size(downloaded_size)} of {pretty_file_size(total_size)}")
 
     finally:
         response.close()
@@ -324,22 +317,22 @@ def _streaming_download(
         task.logging_last(f"{__name__}", f"---> downloaded {pretty_file_size(downloaded_size)}")
         
         for chunk in response.iter_content(chunk_size=chunk_size):
-            if not chunk:  # Проверяем на пустые чанки
-                task.logging(f"{__name__}", "WARNING: Получен пустой чанк данных")
+            if not chunk:  # Checking for empty chunks
+                task.logging(f"{__name__}", "WARNING: Received empty data chunk")
                 continue
                 
             downloaded_size += len(chunk)
             task.logging_last(f"{__name__}", f"---> downloaded {pretty_file_size(downloaded_size)}")
             
-            # Проверяем, что скачано достаточно данных
+            # Checking if enough data downloaded
             if total_size and downloaded_size >= total_size:
-                task.logging(f"{__name__}", f"Скачивание завершено: {pretty_file_size(downloaded_size)}")
+                task.logging(f"{__name__}", f"Download completed: {pretty_file_size(downloaded_size)}")
 
             yield chunk
         
-        # Финальная проверка размера
+        # Final size check
         if total_size and downloaded_size < total_size:
-            task.logging(f"{__name__}", f"WARNING: Скачано меньше ожидаемого размера: {pretty_file_size(downloaded_size)} из {pretty_file_size(total_size)}")
+            task.logging(f"{__name__}", f"WARNING: Downloaded less than expected size: {pretty_file_size(downloaded_size)} of {pretty_file_size(total_size)}")
 
     finally:
         response.close()
@@ -353,13 +346,13 @@ def _get_response_with_range(
         json: Optional[Dict] = None,
         resume_from: int = 0,
 ) -> Response:
-    """HTTP-запрос с поддержкой Range для докачки"""
-    task.logging(f"{__name__}", f"Скачивание пакета {'(докачка)' if resume_from > 0 else ''}")
+    """HTTP request with Range support for resume"""
+    task.logging(f"{__name__}", f"Downloading package {'(resume)' if resume_from > 0 else ''}")
     
     headers = {}
     if resume_from > 0:
         headers['Range'] = f'bytes={resume_from}-'
-        task.logging(f"{__name__}", f"Запрос докачки с позиции {resume_from}")
+        task.logging(f"{__name__}", f"Resume request from position {resume_from}")
     
     try:
         if http_method == HTTPMethod.GET:
@@ -367,21 +360,21 @@ def _get_response_with_range(
         else:
             response = requests.post(url, data=data, json=json, stream=True, timeout=300, headers=headers)
         
-        task.logging(f"{__name__}", f"URL источника: {url}")
-        task.logging(f"{__name__}", f" -- Код ответа: {response.status_code}")
+        task.logging(f"{__name__}", f"Source URL: {url}")
+        task.logging(f"{__name__}", f" -- Response code: {response.status_code}")
         task.logging(f"{__name__}", f" -- Content-type: {response.headers.get('Content-Type')}")
-        task.logging(f"{__name__}", f" -- Content-Length: {response.headers.get('Content-Length', 'неизвестно')}")
-        task.logging(f"{__name__}", f" -- Content-Range: {response.headers.get('Content-Range', 'неизвестно')}")
+        task.logging(f"{__name__}", f" -- Content-Length: {response.headers.get('Content-Length', 'unknown')}")
+        task.logging(f"{__name__}", f" -- Content-Range: {response.headers.get('Content-Range', 'unknown')}")
         
         return response
     except requests.exceptions.Timeout:
-        task.logging(f"{__name__}", f"ERROR: Таймаут при скачивании с {url}")
-        raise Exception(f"Таймаут при скачивании пакета с {url}")
+        task.logging(f"{__name__}", f"ERROR: Timeout downloading from {url}")
+        raise Exception(f"Timeout downloading package from {url}")
     except requests.exceptions.ConnectionError as e:
-        task.logging(f"{__name__}", f"ERROR: Ошибка соединения с {url}: {str(e)}")
-        raise Exception(f"Ошибка соединения при скачивании пакета: {str(e)}")
+        task.logging(f"{__name__}", f"ERROR: Connection error with {url}: {str(e)}")
+        raise Exception(f"Connection error downloading package: {str(e)}")
     except Exception as e:
-        task.logging(f"{__name__}", f"ERROR: Неожиданная ошибка при скачивании: {str(e)}")
+        task.logging(f"{__name__}", f"ERROR: Unexpected error downloading: {str(e)}")
         raise
 
 
@@ -392,27 +385,27 @@ def _get_response(
         data: Optional[Dict] = None,
         json: Optional[Dict] = None,
 ) -> Response:
-    task.logging(f"{__name__}", "Скачивание пакета")
+    task.logging(f"{__name__}", "Downloading package")
     try:
         if http_method == HTTPMethod.GET:
-            response = requests.get(url, stream=True, timeout=300, verify=settings.SSL_VERIFY)  # 5 минут таймаут
+            response = requests.get(url, stream=True, timeout=300, verify=settings.SSL_VERIFY)  # 5 minute timeout
         else:
             response = requests.post(url, data=data, json=json, stream=True, timeout=300, verify=settings.SSL_VERIFY)
         
-        task.logging(f"{__name__}", f"URL источника: {url}")
-        task.logging(f"{__name__}", f" -- Код ответа: {response.status_code}")
+        task.logging(f"{__name__}", f"Source URL: {url}")
+        task.logging(f"{__name__}", f" -- Response code: {response.status_code}")
         task.logging(f"{__name__}", f" -- Content-type: {response.headers.get('Content-Type')}")
-        task.logging(f"{__name__}", f" -- Content-Length: {response.headers.get('Content-Length', 'неизвестно')}")
+        task.logging(f"{__name__}", f" -- Content-Length: {response.headers.get('Content-Length', 'unknown')}")
         
         return response
     except requests.exceptions.Timeout:
-        task.logging(f"{__name__}", f"ERROR: Таймаут при скачивании с {url}")
-        raise Exception(f"Таймаут при скачивании пакета с {url}")
+        task.logging(f"{__name__}", f"ERROR: Timeout downloading from {url}")
+        raise Exception(f"Timeout downloading package from {url}")
     except requests.exceptions.ConnectionError as e:
-        task.logging(f"{__name__}", f"ERROR: Ошибка соединения с {url}: {str(e)}")
-        raise Exception(f"Ошибка соединения при скачивании пакета: {str(e)}")
+        task.logging(f"{__name__}", f"ERROR: Connection error with {url}: {str(e)}")
+        raise Exception(f"Connection error downloading package: {str(e)}")
     except Exception as e:
-        task.logging(f"{__name__}", f"ERROR: Неожиданная ошибка при скачивании: {str(e)}")
+        task.logging(f"{__name__}", f"ERROR: Unexpected error downloading: {str(e)}")
         raise
 
 
@@ -452,7 +445,7 @@ def memory_usage():
 
 
 def _upload_single_file(file_info, bucket_name, error_lock, first_error):
-    """Воркер для загрузки одного файла в S3"""
+    """Worker for uploading single file to S3"""
     full_path, s3_path, content_type = file_info
     
     try:
@@ -469,7 +462,7 @@ def _upload_single_file(file_info, bucket_name, error_lock, first_error):
 def sync_to_s3_with_content_type(local_folder, bucket_name, destination_folder, task=None):
     start_time = time.time()
     
-    # Собираем список всех файлов для загрузки
+    # Collecting list of all files for upload
     files_to_upload = []
     for subdir, dirs, files in os.walk(local_folder):
         for file in files:
@@ -484,50 +477,50 @@ def sync_to_s3_with_content_type(local_folder, bucket_name, destination_folder, 
     
     if total_files == 0:
         if task:
-            task.logging(f"{__name__}", "S3 - нет файлов для загрузки")
+            task.logging(f"{__name__}", "S3 - no files to upload")
         return
     
-    # Thread-safe переменные для отслеживания ошибок
+    # Thread-safe variables for error tracking
     error_lock = Lock()
-    first_error = [None]  # Используем список для передачи по ссылке
+    first_error = [None]  # Using list for pass-by-reference
     
-    # Параллельная загрузка через ThreadPoolExecutor
+    # Parallel upload via ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=20) as executor:
-        # Отправляем все задачи на выполнение
+        # Submitting all tasks for execution
         futures = {executor.submit(_upload_single_file, file_info, bucket_name, error_lock, first_error): file_info 
                    for file_info in files_to_upload}
         
-        # Обрабатываем завершение задач
+        # Processing task completion
         for future in as_completed(futures):
             error = future.result()
             
-            # Если произошла ошибка, останавливаем все задачи
+            # If error occurred, stopping all tasks
             if error is not None:
-                # Отменяем все оставшиеся задачи
+                # Cancelling all remaining tasks
                 for f in futures:
                     if not f.done():
                         f.cancel()
-                # Выходим из цикла, shutdown произойдет автоматически при выходе из контекста
+                # Exiting loop, shutdown will happen automatically on context exit
                 break
         
-        # Если была ошибка, выбрасываем исключение
+        # If there was an error, raising exception
         if first_error[0] is not None:
             s3_path, exc, tb = first_error[0]
-            error_msg = f"S3 - ошибка при загрузке файла {s3_path}: {exc}"
+            error_msg = f"S3 - error uploading file {s3_path}: {exc}"
             if task:
                 task.logging(f"{__name__}", f"[ERROR] {error_msg}, traceback: {tb}")
             raise Exception(error_msg) from exc
     
-    # Финальное логирование
+    # Final logging
     elapsed_time = time.time() - start_time
     total_size_mb = total_size / (1024 * 1024)
     
     if task:
         task.logging(
             f"{__name__}",
-            f"S3 - загрузка завершена успешно: {total_files} файлов, "
-            f"{total_size_mb:.2f} MB, время: {elapsed_time:.2f} сек, "
-            f"скорость: {total_size_mb / elapsed_time:.2f} MB/сек"
+            f"S3 - upload completed successfully: {total_files} files, "
+            f"{total_size_mb:.2f} MB, time: {elapsed_time:.2f} sec, "
+            f"speed: {total_size_mb / elapsed_time:.2f} MB/sec"
         )
 
 
@@ -562,7 +555,7 @@ file_to_s3 = zip_to_s3
 
 
 def upload_stream_to_s3(stream, bucket, key, content_type=None, task=None):
-    """Загрузка в S3 с указанием content-type"""
+    """Upload to S3 with content-type"""
     extra_args = {"ContentType": content_type} if content_type else None
     try:
         if extra_args:

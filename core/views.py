@@ -11,12 +11,11 @@ from django.views.decorators.csrf import csrf_exempt
 
 from core.models import Task, TaskStatus
 from reference.models import Source, DataType
-from core.tasks import process_publisher
+from core.tasks import process_source_data
 
 
 @method_decorator(csrf_exempt, name='dispatch')
 class PublishView(View):
-
     def post(self, request):
         try:
             token = request.META["HTTP_AUTHORIZATION"].split("Token ")[1]
@@ -30,53 +29,37 @@ class PublishView(View):
         try:
             body = request.body.decode()
             body = body.replace('""', '"/"')
-            publisher_meta = json.loads(body)
+            meta = json.loads(body)
         except Exception as e:
             response = JsonResponse({"error_description": str(e), "error": "invalid JSON"}, status=400)
             return response
 
-        task.publisher_meta = publisher_meta
-        task.publisher_status = TaskStatus.STATUS_PROGRESS
-        task.save(update_fields=['publisher_meta', 'publisher_status'])
+        task.meta = meta
+        task.status = TaskStatus.STATUS_PROGRESS
+        task.save(update_fields=['meta', 'status'])
 
-        # проверяем запрос на валидность для данной издательской системы
-        if source.validator:
-            try:
-                validator_module = importlib.import_module(source.validator)
-                validator_module.validate(task.publisher_meta)
-            except Exception as e:
-                response = JsonResponse({"error_description": str(e), "error": "invalid meta"}, status=400)
-                return response
+        data_type = None
+        if meta.get('type', None):
+            data_type = DataType.objects.filter(source=source, source_code=meta.get('type')).first()
 
-        # находим тип контента
-        content = None
-        if publisher_meta.get('media_type', None):
-            content = DataType.objects.filter(source=source,
-                                                         source_code=publisher_meta.get('media_type')).first()
-        elif publisher_meta.get('content', None):
-            content = DataType.objects.filter(source=source,
-                                                         source_code=publisher_meta.get('content')).first()
-
-        if not content:
-            response = JsonResponse({"error_description": "Unknown content type", "error": "invalid meta"}, status=400)
+        if not data_type:
+            response = JsonResponse({"error_description": "Unknown data type", "error": "invalid meta"}, status=400)
             return response
 
-        task.service = content
-        task.save(update_fields=['service', ])
+        task.data_type = data_type
+        task.save(update_fields=['data_type', ])
 
         if settings.DEBUG:
-            process_publisher(task.id)
+            process_source_data(task.id)
         else:
             @transaction.on_commit
             def execute_async_publish() -> None:
-                # запускаем асинхронный процесс обработки публикации
-                process_publisher.delay(task.id)
+                process_source_data.delay(task.id)
 
-        return JsonResponse({"code": task.publisher_meta["code"], "task": task.id}, status=200)
+        return JsonResponse({"code": task.data_type.source_code, "task": task.id}, status=200)
 
 
 class StatusView(View):
-
     def get(self, request, task_id):
         try:
             token = request.META["HTTP_AUTHORIZATION"].split("Token ")[1]
@@ -91,7 +74,7 @@ class StatusView(View):
         try:
             task = Task.objects.get(source=source, id=task_id)
 
-            if task.publisher_status == TaskStatus.STATUS_ERROR or task.service_status == TaskStatus.STATUS_ERROR:
+            if task.status == TaskStatus.STATUS_ERROR:
                 return JsonResponse({
                     "task": task.id,
                     "code": None,
@@ -101,7 +84,6 @@ class StatusView(View):
                     "description": "",
                     "last_log": task.last_log,
                     "error": task.error_description,
-                    "preview-url": task.service_item_link,
                 })
 
             if task.items.count() > 0:
@@ -109,13 +91,12 @@ class StatusView(View):
                 return JsonResponse({
                     "task": task.id,
                     "code": ci.sku,
-                    "status": task.service_status if task.service_status else TaskStatus.STATUS_PROGRESS,
+                    "status": task.status,
                     "progress": task.progress,
                     "upload_progress": task.upload_progress,
                     "last_log": task.last_log,
                     "description": "",
                     "error": "",
-                    "preview-url": task.service_item_link,
                 })
             else:
                 return JsonResponse({
@@ -126,7 +107,6 @@ class StatusView(View):
                     "last_log": task.last_log,
                     "description": "",
                     "error": "",
-                    "preview-url": task.service_item_link,
                 })
 
         except Task.DoesNotExist:
@@ -134,35 +114,3 @@ class StatusView(View):
                 "code": 0,
                 "verbose": "requested task ID not found",
             }, status=400)
-
-
-@method_decorator(csrf_exempt, name='dispatch')
-class UnPublishView(View):
-
-    def post(self, request):
-        try:
-            token = request.META["HTTP_AUTHORIZATION"].split("Token ")[1]
-            source = Source.objects.get(key=token)
-        except Source.DoesNotExist:
-            response = HttpResponse("Invalid token", status=403)
-            return response
-
-        body = request.body.decode()
-        body = body.replace('""', '"/"')
-        data = json.loads(body)
-        task = Task.objects.filter(id=data["id"], source=source).first()
-        if not task:
-            return JsonResponse({
-                "code": 0,
-                "verbose": "Invalid task number",
-                "task": data["id"],
-            }, status=400)
-
-        # Note: unpublish_stages functionality has been removed
-        # as UnPublishStage model was deleted during refactoring
-
-        return JsonResponse({
-            "error": False,
-            "error_text": None,
-            "task": task.id,
-        })
