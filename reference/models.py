@@ -61,6 +61,9 @@ class Consumer(Model):
     type = CharField(max_length=50, choices=Types.choices, default=Types.WEBHOOK, verbose_name="Type")
     key = CharField(max_length=1024, null=True, blank=True, verbose_name="Access Key")
 
+    webhook = ForeignKey('reference.Webhook', on_delete=CASCADE, null=True, verbose_name="Webhook")
+    datasource = ForeignKey('reference.DataSource', on_delete=CASCADE, null=True, verbose_name="DataSource")
+
     def __str__(self):
         return self.name
 
@@ -69,7 +72,31 @@ class Consumer(Model):
         verbose_name_plural = "Consumers"
 
 
+class Webhook(Model):
+    url = URLField(max_length=2048, null=True, verbose_name="Webhook URL")
+    jwt_secret = CharField(max_length=1024, null=True, blank=True, verbose_name="JWT Secret")
+    aud = CharField(max_length=100, null=True, blank=True, verbose_name="AUD")
+    ttl = IntegerField(default=3600, verbose_name="JWT TTL (seconds)")
+
+    class Meta:
+        verbose_name = "Webhook"
+        verbose_name_plural = "Webhooks"
+
+    def __str__(self):
+        return f"Webhook {self.url}"
 
 
+class DataSource(Model):
+    class Types(TextChoices):
+        POSTGRES = "postgres", "PostgreSQL"
+        DUCKDB = "duckdb", "DuckDB"
 
+    type = CharField(max_length=50, choices=Types.choices, default=Types.POSTGRES, verbose_name="Type")
+    connection = CharField(max_length=2048, null=True, verbose_name="Connection String")
 
+    class Meta:
+        verbose_name = "Data Source"
+        verbose_name_plural = "Data Sources"
+
+    def __str__(self):
+        return f"{self.type} DataSource"

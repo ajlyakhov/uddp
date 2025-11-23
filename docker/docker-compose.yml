@@ -5,10 +5,12 @@ services:
     build:
       context: ../
       dockerfile: docker/Dockerfile
-    command: bash /opt/app/django.sh
+    command: bash /opt/app/docker/django.sh
     platform: linux/amd64
     ports:
       - 8000:8000
+    volumes:
+      - ../:/opt/app
 
   worker:
     build:
@@ -16,7 +18,9 @@ services:
       dockerfile: docker/Dockerfile
     container_name: worker
     hostname: worker
-    command: bash /opt/app/celery.sh
+    command: bash /opt/app/docker/celery.sh
+    volumes:
+      - ../:/opt/app
 
   redis:
     container_name: redis

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from reference.models import Source, DataType, ProcessingStage, Consumer
+from reference.models import Source, DataType, ProcessingStage, Consumer, Webhook, DataSource
 
 
 
@@ -34,6 +34,16 @@ class DataTypeAdmin(admin.ModelAdmin):
 
 @admin.register(Consumer)
 class ConsumerAdmin(admin.ModelAdmin):
-    list_display = ('name', 'type', 'key', )
+    list_display = ('name', 'type', 'key', 'webhook', 'datasource')
+
+
+@admin.register(Webhook)
+class WebhookAdmin(admin.ModelAdmin):
+    list_display = ('url', 'jwt_secret')
+
+
+@admin.register(DataSource)
+class DataSourceAdmin(admin.ModelAdmin):
+    list_display = ('type', 'connection')
 
 
