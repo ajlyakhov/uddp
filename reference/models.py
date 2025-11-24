@@ -9,6 +9,10 @@ def pipeline_file_path(instance, filename):
     return f"{uuid.uuid4()}.py"
 
 
+def plugin_file_path(instance, filename):
+    return f"plugins/{uuid.uuid4()}.zip"
+
+
 class Workspace(Model):
     name = CharField(max_length=512, verbose_name="Name")
 
@@ -64,7 +68,7 @@ class PluginRepo(Model):
 class Plugin(Model):
     name = CharField(max_length=512, verbose_name="Name")
     repo = ForeignKey('reference.PluginRepo', on_delete=CASCADE, verbose_name="Repository", related_name="plugins")
-    file = FileField(upload_to='plugins/', verbose_name="Plugin File")
+    file = FileField(upload_to=plugin_file_path, verbose_name="Plugin File")
 
     def __str__(self):
         return self.name
