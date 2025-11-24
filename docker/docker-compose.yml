@@ -12,11 +12,16 @@ services:
       - AWS_S3_SECRET_ACCESS_KEY=s3secretkey
       - AWS_STORAGE_BUCKET_NAME=uddp
       - AWS_S3_REGION_NAME=us-east-1
+      - AWS_S3_URL_PROTOCOL=http:
+      - AWS_S3_CUSTOM_DOMAIN=localhost:9000/uddp
     platform: linux/amd64
     ports:
       - 8000:8000
     volumes:
       - ../:/opt/app
+    depends_on:
+      - minio
+      - redis
 
   worker:
     build:
@@ -31,8 +36,13 @@ services:
       - AWS_S3_SECRET_ACCESS_KEY=s3secretkey
       - AWS_STORAGE_BUCKET_NAME=uddp
       - AWS_S3_REGION_NAME=us-east-1
+      - AWS_S3_URL_PROTOCOL=http:
+      - AWS_S3_CUSTOM_DOMAIN=localhost:9000/uddp
     volumes:
       - ../:/opt/app
+    depends_on:
+      - minio
+      - redis
 
   redis:
     container_name: redis
