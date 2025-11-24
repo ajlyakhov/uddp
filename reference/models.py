@@ -110,7 +110,7 @@ class ProcessingStage(Model):
     data_type = ForeignKey('reference.DataType', on_delete=CASCADE, null=True,
                                    verbose_name="Data Type", related_name="processing_stages")
     step = IntegerField(default=0, verbose_name="Processing Step")
-    module_file = FileField(storage=PipelineStorage(), upload_to=pipeline_file_path, null=True, verbose_name="Processing Software Module")
+    plugin = ForeignKey('reference.Plugin', on_delete=CASCADE, null=True, verbose_name="Plugin")
     active = BooleanField(default=True, verbose_name="Processing Stage Active")
     workspace = ForeignKey('reference.Workspace', on_delete=CASCADE, null=True, verbose_name="Workspace")
 
