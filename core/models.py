@@ -23,6 +23,7 @@ class Task(Model):
     # Output
     data_type = ForeignKey('reference.DataType', on_delete=SET_NULL, null=True, verbose_name="Target Service",
                          related_name="tasks")
+    workspace = ForeignKey('reference.Workspace', on_delete=CASCADE, null=True, verbose_name="Workspace")
 
     # Internal Logging
     log = TextField(null=True, blank=True, verbose_name="Task Processing Log")
@@ -79,6 +80,7 @@ class DataItem(Model):
     meta = JSONField(null=True, blank=True, verbose_name="Package Metadata")
     task = ForeignKey('core.Task', on_delete=SET_NULL, null=True, verbose_name="Publication Task",
                       related_name="items")
+    workspace = ForeignKey('reference.Workspace', on_delete=CASCADE, null=True, verbose_name="Workspace")
 
     class Meta:
         verbose_name = "Data Item"
@@ -93,6 +95,7 @@ class WebhookLog(Model):
     task = ForeignKey('core.Task', on_delete=SET_NULL, null=True, verbose_name="Publication Task",
                       related_name="webhook_logs")
     webhook = ForeignKey('reference.Webhook', on_delete=SET_NULL, null=True, verbose_name="Webhook")
+    workspace = ForeignKey('reference.Workspace', on_delete=CASCADE, null=True, verbose_name="Workspace")
 
     response = JSONField(null=True, blank=True, verbose_name="Response Body")
     status_code = IntegerField(null=True, verbose_name="Status Code")
@@ -111,6 +114,7 @@ class DatasourceLog(Model):
     task = ForeignKey('core.Task', on_delete=SET_NULL, null=True, verbose_name="Publication Task",
                       related_name="datasource_logs")
     datasource = ForeignKey('reference.DataSource', on_delete=SET_NULL, null=True, verbose_name="Datasource")
+    workspace = ForeignKey('reference.Workspace', on_delete=CASCADE, null=True, verbose_name="Workspace")
 
     response = JSONField(null=True, blank=True, verbose_name="Response Body")
     status_code = IntegerField(null=True, verbose_name="Status Code")

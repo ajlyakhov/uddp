@@ -6,6 +6,12 @@ services:
       context: ../
       dockerfile: docker/Dockerfile
     command: bash /opt/app/docker/django.sh
+    environment:
+      - AWS_S3_ENDPOINT_URL=http://minio:9000
+      - AWS_S3_ACCESS_KEY_ID=s3user
+      - AWS_S3_SECRET_ACCESS_KEY=s3secretkey
+      - AWS_STORAGE_BUCKET_NAME=uddp
+      - AWS_S3_REGION_NAME=us-east-1
     platform: linux/amd64
     ports:
       - 8000:8000
@@ -19,6 +25,12 @@ services:
     container_name: worker
     hostname: worker
     command: bash /opt/app/docker/celery.sh
+    environment:
+      - AWS_S3_ENDPOINT_URL=http://minio:9000
+      - AWS_S3_ACCESS_KEY_ID=s3user
+      - AWS_S3_SECRET_ACCESS_KEY=s3secretkey
+      - AWS_STORAGE_BUCKET_NAME=uddp
+      - AWS_S3_REGION_NAME=us-east-1
     volumes:
       - ../:/opt/app
 
@@ -32,5 +44,28 @@ services:
       - redis-data:/data
     restart: always
 
+  minio:
+    image: minio/minio
+    container_name: minio
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=s3user
+      - MINIO_ROOT_PASSWORD=s3secretkey
+      - MINIO_DEFAULT_BUCKETS=uddp
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    restart: always
+
+  createbuckets:
+    image: minio/mc
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c " /usr/bin/mc alias set myminio http://minio:9000 s3user s3secretkey; /usr/bin/mc mb myminio/uddp; /usr/bin/mc anonymous set public myminio/uddp; exit 0; "
+
 volumes:
   redis-data:
+  minio_data:

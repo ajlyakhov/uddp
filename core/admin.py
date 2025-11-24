@@ -16,8 +16,8 @@ from conf.celery import app
 
 @admin.register(Task)
 class TaskAdmin(admin.ModelAdmin):
-    list_display = ('id', 'status', 'created', 'source', 'data_type', 'service_platform', 'items')
-    list_filter = ('source', 'status', 'data_type')
+    list_display = ('id', 'status', 'created', 'source', 'data_type', 'service_platform', 'items', 'workspace')
+    list_filter = ('source', 'status', 'data_type', 'workspace')
     readonly_fields = ('id', 'status', 'service_platform', 'meta_pretty', 'context_pretty')
     date_hierarchy = 'created'
     search_fields = ('id',)
@@ -154,12 +154,12 @@ class TaskAdmin(admin.ModelAdmin):
 
 @admin.register(DataItem)
 class DataItemAdmin(admin.ModelAdmin):
-    list_display = ('created', 'type', 'source')
+    list_display = ('created', 'type', 'source', 'workspace')
     search_fields = ('id',)
     readonly_fields = ('meta_pretty', )
     exclude = ('meta', )
     raw_id_fields = ('task',)
-    list_filter = ('type', 'source')
+    list_filter = ('type', 'source', 'workspace')
 
     def meta_pretty(self, obj: DataItem):
         return pretty_json(obj.meta)
@@ -176,13 +176,13 @@ class DataItemAdmin(admin.ModelAdmin):
 
 @admin.register(WebhookLog)
 class WebhookLogAdmin(admin.ModelAdmin):
-    list_display = ('created', 'task', 'webhook', 'status_code')
-    list_filter = ('webhook', 'status_code')
+    list_display = ('created', 'task', 'webhook', 'status_code', 'workspace')
+    list_filter = ('webhook', 'status_code', 'workspace')
     date_hierarchy = 'created'
 
 
 @admin.register(DatasourceLog)
 class DatasourceLogAdmin(admin.ModelAdmin):
-    list_display = ('created', 'task', 'datasource', 'status_code')
-    list_filter = ('datasource', 'status_code')
+    list_display = ('created', 'task', 'datasource', 'status_code', 'workspace')
+    list_filter = ('datasource', 'status_code', 'workspace')
     date_hierarchy = 'created'
