@@ -61,8 +61,8 @@ class Consumer(Model):
     type = CharField(max_length=50, choices=Types.choices, default=Types.WEBHOOK, verbose_name="Type")
     key = CharField(max_length=1024, null=True, blank=True, verbose_name="Access Key")
 
-    webhook = ForeignKey('reference.Webhook', on_delete=CASCADE, null=True, verbose_name="Webhook")
-    datasource = ForeignKey('reference.DataSource', on_delete=CASCADE, null=True, verbose_name="DataSource")
+    webhook = ForeignKey('reference.Webhook', on_delete=CASCADE, null=True, blank=True, verbose_name="Webhook")
+    datasource = ForeignKey('reference.DataSource', on_delete=CASCADE, null=True, blank=True, verbose_name="DataSource")
 
     def __str__(self):
         return self.name

@@ -57,17 +57,14 @@ class TestPublishView(LoginRequiredMixin, View):
         if form.is_valid():
             source = form.cleaned_data['source']
             content_type = form.cleaned_data['content_type']
-            payload_str = form.cleaned_data['payload']
+            path = form.cleaned_data['path']
             
             try:
-                payload = json.loads(payload_str)
-                # Add content type to payload if not present, or use it as media_type/content
-                if 'media_type' not in payload and 'content' not in payload:
-                    payload['content'] = content_type
-                
-                # Construct the URL for the publish endpoint
-                # Assuming the server is running on localhost:8000 for this test
-                # In production, this should be dynamic
+                body = {
+                    "type": content_type.source_code,
+                    "path": path,
+                }
+
                 url = request.build_absolute_uri('/publish/')
                 
                 headers = {
@@ -75,7 +72,7 @@ class TestPublishView(LoginRequiredMixin, View):
                     'Content-Type': 'application/json'
                 }
                 
-                response = requests.post(url, json=payload, headers=headers)
+                response = requests.post(url, json=body, headers=headers)
                 
                 if response.status_code == 200:
                     data = response.json()

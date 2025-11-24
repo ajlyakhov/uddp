@@ -18,7 +18,7 @@ from conf.celery import app
 class TaskAdmin(admin.ModelAdmin):
     list_display = ('id', 'status', 'created', 'source', 'data_type', 'service_platform', 'items')
     list_filter = ('source', 'status', 'data_type')
-    readonly_fields = ('id', 'status', 'service_platform', 'publisher_meta_pretty', 'context_pretty')
+    readonly_fields = ('id', 'status', 'service_platform', 'meta_pretty', 'context_pretty')
     date_hierarchy = 'created'
     search_fields = ('id',)
     list_display_links = ('id', 'created', 'source', 'data_type', 'service_platform')
@@ -29,12 +29,10 @@ class TaskAdmin(admin.ModelAdmin):
             'fields': ('id', 'status'),
         }),
         ('Source System', {
-            'fields': ('publisher_meta_pretty', 'source', 'publisher_date'),
+            'fields': ('meta_pretty', 'source', 'created'),
         }),
         ('Consumer', {
-            'fields': (
-            'service_meta_pretty', 'data_type', 'service_platform', 'service_response', 'service_response_code',
-            'service_publish_date', 'service_item_link'),
+            'fields': ('data_type', 'service_platform'),
         }),
         ('Logging', {
             'fields': ('log', 'error_description', 'context_pretty'),
@@ -45,15 +43,10 @@ class TaskAdmin(admin.ModelAdmin):
         return pretty_json(obj.context)
     context_pretty.short_description = "Task Execution Context"
 
-    def publisher_meta_pretty(self, obj: Task):
-        return pretty_json(obj.publisher_meta)
+    def meta_pretty(self, obj: Task):
+        return pretty_json(obj.meta)
 
-    publisher_meta_pretty.short_description = "Publication Request JSON Data"
-
-    def service_meta_pretty(self, obj: Task):
-        return pretty_json(obj.service_meta)
-
-    service_meta_pretty.short_description = "Service Request JSON Data"
+    meta_pretty.short_description = "Publication Request JSON Data"
 
     def items(self, obj: Task):
         items = []
@@ -133,8 +126,8 @@ class TaskAdmin(admin.ModelAdmin):
             
             # Set success status
             task.status = TaskStatus.STATUS_OK
-            task.publisher_date = datetime.now(tz=pytz.UTC)
-            task.save(update_fields=['status', 'publisher_date'])
+            task.status = TaskStatus.STATUS_OK
+            task.save(update_fields=['status'])
 
     def reimport(self, request, queryset):
         for task in queryset:
@@ -148,9 +141,11 @@ class TaskAdmin(admin.ModelAdmin):
             task.last_log = None
             task.error_description = None
             task.context = None
-            task.service_meta = None
-            task.service_response = None
-            task.save(update_fields=['log', 'last_log', 'error_description', 'context', 'service_meta', 'service_response'])
+            task.log = None
+            task.last_log = None
+            task.error_description = None
+            task.context = None
+            task.save(update_fields=['log', 'last_log', 'error_description', 'context'])
             updated_count += 1
         
         self.message_user(request, f"Logs and metadata cleared for {updated_count} tasks.")

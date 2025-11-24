@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.urls import path, include
 
-from core.views import PublishView, StatusView, UnPublishView
+from core.views import PublishView, StatusView
 
 urlpatterns = [
     path('', include('setup.urls')),

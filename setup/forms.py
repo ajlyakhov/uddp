@@ -7,6 +7,7 @@ class SetupForm(forms.Form):
     source_token = forms.CharField(max_length=512, help_text="Authentication token for the source system")
 
 class PublishTestForm(forms.Form):
+    source = forms.ModelChoiceField(queryset=Source.objects.all(), empty_label="Select Source")
     content_type = forms.ModelChoiceField(queryset=DataType.objects.all(), empty_label="Select Data Type", required=False)
-    payload = forms.CharField(widget=forms.Textarea, help_text="JSON payload for the publish request")
+    path = forms.URLField(help_text="Data download URL")
 
