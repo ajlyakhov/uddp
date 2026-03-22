@@ -10,3 +10,5 @@ coverage.xml
 .coverage
 *.sqlite3
 db.sqlite3
+.coverage
+__pycache__/

@@ -178,6 +178,24 @@ uddp/
 
 ---
 
+## 📖 Demo Scenarios
+
+Two pre-configured scenarios are included to demonstrate the pipeline:
+
+| Scenario | Stages | Description |
+|---|---|---|
+| `file_upload` | 1 | Download a file from URL → upload to S3 |
+| `image_resize` | 2 | Download image → resize to 50% → upload to S3 |
+
+👉 **See [docs/scenarios.md](docs/scenarios.md) for full walkthrough.**
+
+To set up the demo pipelines:
+```bash
+python manage.py shell < bootstrap_demo.py
+```
+
+---
+
 ## 🧪 Running Tests
 
 ```bash

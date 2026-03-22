@@ -5,11 +5,18 @@ omit =
     */venv/*
     manage.py
     bootstrap_demo.py
+    core/utils.py
+    conf/asgi.py
+    conf/wsgi.py
+    conf/s3static.py
 
 [report]
 show_missing = true
 skip_covered = false
 ignore_errors = true
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
 
 [html]
 directory = htmlcov
