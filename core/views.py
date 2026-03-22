@@ -20,9 +20,8 @@ class PublishView(View):
         try:
             token = request.META["HTTP_AUTHORIZATION"].split("Token ")[1]
             source = Source.objects.get(key=token)
-        except Source.DoesNotExist:
-            response = HttpResponse("Invalid token", status=403)
-            return response
+        except (KeyError, IndexError, Source.DoesNotExist):
+            return HttpResponse("Invalid token", status=403)
 
         task = Task.objects.create(source=source, context={})
 
@@ -31,8 +30,7 @@ class PublishView(View):
             body = body.replace('""', '"/"')
             meta = json.loads(body)
         except Exception as e:
-            response = JsonResponse({"error_description": str(e), "error": "invalid JSON"}, status=400)
-            return response
+            return JsonResponse({"error_description": str(e), "error": "invalid JSON"}, status=400)
 
         task.meta = meta
         task.status = TaskStatus.STATUS_PROGRESS
@@ -43,8 +41,7 @@ class PublishView(View):
             data_type = DataType.objects.filter(source=source, source_code=meta.get('type')).first()
 
         if not data_type:
-            response = JsonResponse({"error_description": "Unknown data type", "error": "invalid meta"}, status=400)
-            return response
+            return JsonResponse({"error_description": "Unknown data type", "error": "invalid meta"}, status=400)
 
         task.data_type = data_type
         task.save(update_fields=['data_type', ])
@@ -64,12 +61,8 @@ class StatusView(View):
         try:
             token = request.META["HTTP_AUTHORIZATION"].split("Token ")[1]
             source = Source.objects.get(key=token)
-        except Source.DoesNotExist:
-            response = HttpResponse("Invalid token", status=403)
-            return response
-        except Exception as e:
-            response = HttpResponse("You should pass token in Authorization header", status=400)
-            return response
+        except (KeyError, IndexError, Source.DoesNotExist):
+            return HttpResponse("Invalid token", status=403)
 
         try:
             task = Task.objects.get(source=source, id=task_id)
@@ -80,7 +73,6 @@ class StatusView(View):
                     "code": None,
                     "status": TaskStatus.STATUS_ERROR,
                     "progress": task.progress,
-                    "upload_progress": task.upload_progress,
                     "description": "",
                     "last_log": task.last_log,
                     "error": task.error_description,
@@ -90,10 +82,9 @@ class StatusView(View):
                 ci = task.items.filter().first()
                 return JsonResponse({
                     "task": task.id,
-                    "code": ci.sku,
+                    "code": ci.type.source_code if ci.type else None,
                     "status": task.status,
                     "progress": task.progress,
-                    "upload_progress": task.upload_progress,
                     "last_log": task.last_log,
                     "description": "",
                     "error": "",
@@ -102,7 +93,7 @@ class StatusView(View):
                 return JsonResponse({
                     "task": task.id,
                     "code": None,
-                    "status": TaskStatus.STATUS_PROGRESS,
+                    "status": task.status,
                     "progress": task.progress,
                     "last_log": task.last_log,
                     "description": "",

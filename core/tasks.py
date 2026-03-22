@@ -24,10 +24,11 @@ def process_source_data(task_id):
             try:
                 task.set_context({"tmp_dir": tmp_dir})
                 
-                module_filename = os.path.basename(stage.module_file.name)
-                local_module_path = os.path.join(tmp_dir, module_filename)
+                module_filename = os.path.basename(stage.plugin.file.name)
+                # Always save with .py extension so importlib can load it
+                local_module_path = os.path.join(tmp_dir, f"stage_{stage.step}.py")
                 
-                with stage.module_file.open('rb') as f:
+                with stage.plugin.file.open('rb') as f:
                     with open(local_module_path, 'wb') as local_f:
                         local_f.write(f.read())
 
@@ -43,7 +44,7 @@ def process_source_data(task_id):
                 task.save(update_fields=['current_task', 'progress', ])
 
             except Exception as e:
-                task.set_error(f'module {stage.module_file.name}: {e}, traceback: {traceback.format_exc()}')
+                task.set_error(f'module {stage.plugin.file.name}: {e}, traceback: {traceback.format_exc()}')
                 return
 
         task.logging(f"{__name__}", "Processing completed")

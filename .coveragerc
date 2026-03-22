@@ -1,0 +1,16 @@
+[run]
+source = core,reference,conf
+omit =
+    */migrations/*
+    */venv/*
+    manage.py
+    bootstrap_demo.py
+
+[report]
+show_missing = true
+skip_covered = false
+ignore_errors = true
+
+[html]
+directory = htmlcov
+title = UDDP Coverage Report
