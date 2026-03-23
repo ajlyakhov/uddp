@@ -1,11 +1,11 @@
-FROM python:3.14-slim
+FROM python:3.12-slim
 
 # set work directory
 WORKDIR /opt/app
 
 # set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 # install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
