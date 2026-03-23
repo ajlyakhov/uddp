@@ -12,7 +12,8 @@ from django.core.files.base import ContentFile
 from reference.models import Workspace, Source, PluginRepo, Plugin, DataType, ProcessingStage
 from django.contrib.auth.models import User
 
-BASE = "/home/ubuntu/.openclaw/workspace/uddp/pipeline_plugins"
+from django.conf import settings
+BASE = os.path.join(settings.BASE_DIR, "pipeline_plugins")
 
 
 def load_plugin(repo, name, filename):
