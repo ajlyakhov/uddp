@@ -17,6 +17,16 @@ Built with **Django**, **Celery**, and **Redis**.
 
 ---
 
+## 📚 Documentation
+
+| Guide | Audience | Description |
+|---|---|---|
+| [User Guide](docs/user-guide.md) | Admins & content managers | Admin panel walkthrough, pipeline setup, monitoring, troubleshooting |
+| [Developer Guide](docs/developer-guide.md) | Developers | Plugin interface, architecture, testing, patterns |
+| [Demo Scenarios](docs/scenarios.md) | Everyone | Pre-built pipeline walkthroughs with API examples |
+
+---
+
 ## 🛠️ Tech Stack
 
 | Layer | Technology |
@@ -186,6 +196,7 @@ Two pre-configured scenarios are included to demonstrate the pipeline:
 |---|---|---|
 | `file_upload` | 1 | Download a file from URL → upload to S3 |
 | `image_resize` | 2 | Download image → resize to 50% → upload to S3 |
+| `image_export` | 4 | Normalize → strip EXIF → generate WebP variants → upload manifest to S3 |
 
 👉 **See [docs/scenarios.md](docs/scenarios.md) for full walkthrough.**
 

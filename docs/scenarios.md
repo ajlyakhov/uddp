@@ -80,6 +80,91 @@ The task context will include resize metadata:
 
 ---
 
+## Scenario 3 — Multi-Format Image Export
+
+**What it does:** Accepts an image URL and produces three cloud-ready WebP variants (thumbnail, medium, full resolution) along with a JSON manifest file listing all output URLs. EXIF metadata (GPS coordinates, camera model, etc.) is stripped before any variant is generated.
+
+**Pipeline:** 4 stages
+```
+[Source]
+    │
+    ▼
+normalize_image   — download + resize to max 2048px wide → PNG in tmp_dir
+    │  context: local_file, original_size, normalized_size
+    ▼
+strip_exif        — re-save PNG without EXIF metadata (overwrite in tmp_dir)
+    │  context: local_file (unchanged)
+    ▼
+generate_variants — produce thumb_150.webp, medium_800.webp, full.webp
+    │  context: variants = {thumb: path, medium: path, full: path}
+    ▼
+upload_manifest   — upload all 3 WebP files + manifest.json to S3
+    │  context: output_url = manifest URL, manifest = {...}
+    ▼
+[S3: uploads/<task_id>/]
+```
+
+**How the stages communicate:**
+- `normalize_image` downloads the source image, normalizes the size, saves a PNG to `tmp_dir`, and stores its path in `task.context["local_file"]`
+- `strip_exif` reads `local_file`, re-encodes the PNG without EXIF, overwrites the file in place
+- `generate_variants` reads `local_file`, produces three WebP files in `tmp_dir`, stores their paths in `task.context["variants"]`
+- `upload_manifest` reads `variants`, uploads each to S3, builds a manifest JSON, uploads it, and stores the manifest URL in `task.context["output_url"]`
+
+**API call:**
+```bash
+curl -X POST http://your-server:8000/publish/ \
+  -H "Authorization: Token demo-token-export" \
+  -H "Content-Type: application/json" \
+  -d '{"type": "image_export", "url": "https://uddp-demo.s3.eu-west-3.amazonaws.com/source/rick.png"}'
+```
+
+**Response:**
+```json
+{"code": "image_export", "task": 3}
+```
+
+**Check status:**
+```bash
+curl http://your-server:8000/publish/status/3/ \
+  -H "Authorization: Token demo-token-export"
+```
+
+**Sample completed status response:**
+```json
+{
+  "task": 3,
+  "status": 1,
+  "progress": 100,
+  "last_log": "[upload_manifest] Manifest uploaded: https://uddp-demo.s3.eu-west-3.amazonaws.com/uploads/3/manifest.json"
+}
+```
+
+**Sample manifest.json output:**
+```json
+{
+  "task_id": 3,
+  "source_url": "https://uddp-demo.s3.eu-west-3.amazonaws.com/source/rick.png",
+  "original_size": "640x480",
+  "normalized_size": "640x480",
+  "variants": {
+    "thumb": "https://uddp-demo.s3.eu-west-3.amazonaws.com/uploads/3/thumb_150.webp",
+    "medium": "https://uddp-demo.s3.eu-west-3.amazonaws.com/uploads/3/medium_800.webp",
+    "full": "https://uddp-demo.s3.eu-west-3.amazonaws.com/uploads/3/full.webp"
+  }
+}
+```
+
+**Output files in S3:**
+
+| File | Description |
+|------|-------------|
+| `uploads/3/thumb_150.webp` | 150×150 square center-crop thumbnail |
+| `uploads/3/medium_800.webp` | 800px wide, proportional height |
+| `uploads/3/full.webp` | Full resolution, converted to WebP |
+| `uploads/3/manifest.json` | JSON index of all variant URLs |
+
+---
+
 ## Adding Custom Scenarios
 
 To create your own pipeline:

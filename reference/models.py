@@ -1,5 +1,6 @@
 
 import importlib
+import os
 
 from django.db.models import *
 import uuid
@@ -10,7 +11,8 @@ def pipeline_file_path(instance, filename):
 
 
 def plugin_file_path(instance, filename):
-    return f"plugins/{uuid.uuid4()}.zip"
+    ext = os.path.splitext(filename)[1] or ".py"
+    return f"plugins/{uuid.uuid4()}{ext}"
 
 
 class Workspace(Model):
