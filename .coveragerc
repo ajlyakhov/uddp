@@ -1,10 +1,11 @@
 [run]
-source = core,reference,conf
+source = core,reference,conf,tests
 omit =
     */migrations/*
     */venv/*
     manage.py
-    bootstrap_demo.py
+    scripts/bootstrap_demo.py
+    scripts/check_*.py
     core/utils.py
     conf/asgi.py
     conf/wsgi.py
