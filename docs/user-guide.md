@@ -42,6 +42,36 @@ A **Workspace** is a top-level container that groups everything together — sou
 
 Most deployments use a single workspace called **Demo** or named after your organisation.
 
+## Managing Users, Teams, and Workspaces
+
+Use this section when onboarding people and setting permissions boundaries.
+
+### Permission model
+
+- **User**: Django account used to sign into `/admin/`
+- **Workspace**: tenant boundary for operational entities (`Source`, `DataType`, `Consumer`, `ProcessingStage`, task/log records)
+- **Team**: group inside one workspace
+- **Team Member**: user membership in team with role:
+  - `maintainer`
+  - `developer`
+
+### Recommended admin workflow
+
+1. Go to **Authentication -> Users** and create the user account.
+2. Go to **Reference -> Workspaces** and create/select workspace.
+3. Go to **Reference -> Teams** and create team under that workspace.
+4. In the team form, add **Team Members** rows:
+   - choose user
+   - set role (`maintainer` or `developer`)
+5. Save and verify the user can sign in to `/admin/`.
+
+### Operational tips
+
+- Create one workspace per client/environment boundary.
+- Use teams to separate responsibilities (for example: ingestion vs. publishing).
+- Keep `maintainer` role limited to people who change pipeline definitions.
+- Rotate credentials and remove stale users regularly.
+
 ### 🔑 Source
 
 A **Source** represents an external system that is allowed to publish content to UDDP. Each source has:

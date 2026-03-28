@@ -553,3 +553,89 @@ print('    -d \'{"type": "my_scenario", "url": "https://example.com/file.png"}\'
 ```
 
 The `get_or_create` pattern means re-running the script is safe — it won't create duplicates.
+
+---
+
+## Runtime Libraries for Plugins
+
+Plugins run inside the same environment as the Django app and Celery worker.
+
+### Python dependencies
+
+Defined in `requirements.txt` (non-exhaustive):
+
+- `Django`, `celery`, `redis`
+- `boto3`, `django-storages`
+- `requests`
+- `stream-unzip`
+- `Pillow`
+- `PyJWT`
+- `beautifulsoup4`, `html5lib`
+- `structlog`
+- `psycopg`, `psycopg2-binary`
+
+### System dependencies (container runtime)
+
+Defined in `docker/Dockerfile`:
+
+- `ffmpeg`
+- `build-essential`
+
+If a plugin imports or executes something unavailable here, stage execution will fail at runtime.
+
+---
+
+## Adding New Library Support
+
+### Add a Python package
+
+1. Add the dependency to `requirements.txt`.
+2. Rebuild runtime images:
+
+```bash
+cd docker
+docker compose build core worker
+docker compose up -d core worker
+```
+
+3. Validate import in worker:
+
+```bash
+docker compose exec worker python -c "import your_library; print(your_library.__version__)"
+```
+
+### Add a system package/binary
+
+1. Update `docker/Dockerfile` (`apt-get install ...`).
+2. Rebuild and restart `core` and `worker`.
+3. Verify availability:
+
+```bash
+docker compose exec worker bash -lc "which <binary> && <binary> --version"
+```
+
+### Promote library usage into reusable helpers
+
+If multiple plugins need the same integration (I/O, retries, upload logic, etc.):
+
+1. Add helper wrappers in `core/utils.py` (or a new helper module).
+2. Keep task logging inside helpers for consistent observability.
+3. Call helpers from `execute(task)` plugins.
+4. Document helper contract in this guide.
+
+---
+
+## Pipeline Provisioning Checklist
+
+- Source token exists and is mapped to correct DataType
+- DataType `source_code` matches incoming API payload `type`
+- Processing stages are ordered and active
+- Plugin dependencies exist in worker runtime
+- Publish smoke test succeeds (`POST /publish/`)
+- Status endpoint and admin task logs confirm healthy execution
+
+---
+
+## Current Implementation Note
+
+The schema currently links stages via `ProcessingStage.plugin` (`reference.models.Plugin`), while parts of the runtime code still reference legacy `module_file` loading semantics. Verify this path in your environment before introducing new plugin delivery conventions or migration tooling.
